@@ -265,6 +265,9 @@ pub(crate) fn read_opened(pkg: &Package) -> Result<Document, DocxError> {
     }
     let mut doc = r.doc;
     doc.ensure_nonempty();
+    // Ids for paragraphs the file left without, and a record of each one's text, so an edit
+    // gives it a new text id.
+    doc.assign_para_ids();
     Ok(doc)
 }
 

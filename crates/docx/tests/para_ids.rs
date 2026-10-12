@@ -82,11 +82,14 @@ fn paragraphs_keep_their_ids_through_an_edit_and_new_ones_get_fresh_ids() {
     let paras = saved_paras(&saved);
     let ids: Vec<(Option<&str>, Option<&str>, &str)> = paras.iter().map(|(p, t, x)| (p.as_deref(), t.as_deref(), x.as_str())).collect();
     assert_eq!(ids.len(), 5, "{ids:?}");
-    assert_eq!(ids[0], (Some("1A2B3C4D"), Some("77777777"), "Alpha "));
+    // Untouched paragraphs keep both ids; edited ones keep their paraId and get a new textId.
+    assert_eq!((ids[0].0, ids[0].2), (Some("1A2B3C4D"), "Alpha "));
+    assert_ne!(ids[0].1, Some("77777777"), "its text changed");
     assert_eq!(ids[1].2, "beta");
     assert_eq!(ids[2], (Some("00000ABC"), Some("2468ACE0"), "Gamma"));
     assert_eq!(ids[3], (Some("0C0FFEE0"), Some("1BADB002"), "Cell"));
-    assert_eq!(ids[4], (Some("7FFFFFFE"), Some("13579BDF"), "Delta and more"));
+    assert_eq!((ids[4].0, ids[4].2), (Some("7FFFFFFE"), "Delta and more"));
+    assert_ne!(ids[4].1, Some("13579BDF"), "its text changed");
     // The new paragraph has an id of its own.
     assert!(usable(&paras[1].0) && usable(&paras[1].1), "{:?}", paras[1]);
     let unique: HashSet<_> = paras.iter().map(|p| p.0.clone()).collect();
