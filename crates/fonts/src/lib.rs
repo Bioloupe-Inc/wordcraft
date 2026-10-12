@@ -4,6 +4,18 @@
 //! Shaping here is style-agnostic: [`shape`] turns a string in one face into glyph ids, clusters
 //! and advances in font units. `wordcraft-compose` applies sizes, tracking, scaling and
 //! justification on top.
+//!
+//! **Fonts at run time.** [`FontDb::install_font`] adds a font file's bytes (TTF, OTF, TTC, WOFF or
+//! WOFF2) to [`FontDb::global`] while the program runs. It needs no filesystem, so a WASM build
+//! gets the fonts a native install or sandbox has by registering the same files at start:
+//!
+//! ```no_run
+//! # let bytes: Vec<u8> = Vec::new();
+//! let added = wordcraft_fonts::FontDb::global().install_font("Carlito-Regular.ttf", &bytes);
+//! ```
+//!
+//! Register each style's file (Regular, Bold, Italic…); documents already open lay out in them
+//! from then on. Agents do the same with the `font.add` command (`{"data": base64, "name"}`).
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
