@@ -24,6 +24,15 @@ with `wordcraft-cli mcp --author "Claude (copyedit)"`, or run
 `review.trackChanges {"value": true}`; without `value` it toggles, which turns tracking *off* in
 a document that was saved with it on. `wordcraft-cli run` takes `--author` too.
 
+## Headless sessions
+
+The headless server and `wordcraft-cli run` change only what their commands say: AutoCorrect and
+AutoFormat As You Type are off (the app keeps Word's defaults; `tools.autocorrect {"enabled":
+true}` turns them on). `inspect_document` gives each paragraph's Word ids (`paraId`, `textId`,
+eight hex digits); they stay with the paragraph through edits and saves, and new paragraphs get
+fresh ones. Fonts the document needs that aren't installed can be added from their bytes with
+`font.add {"data": "<base64>", "name": "Family-Regular.ttf"}`, one call per style.
+
 ## Tools
 
 | Tool | What it does |

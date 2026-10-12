@@ -218,7 +218,8 @@ impl FontDb {
     /// Add the font file `bytes` (TTF, OTF, TTC, WOFF or WOFF2) named `name` (its file name, for
     /// the stored copy). Every face is checked first; faces whose family and style are already
     /// available are skipped (the bundled baseline is never replaced). With a user font folder the
-    /// font is stored there too, for the next start.
+    /// font is stored there too, for the next start; without one (always on WASM) it is kept in
+    /// memory only. Lookups and layout see the new faces at once ([`FontDb::generation`] moves).
     pub fn install_font(&self, name: &str, bytes: &[u8]) -> Result<Installed, UserFontError> {
         let sfnt = decode_font_file(bytes)?;
         let mut font = self.add_user_faces(name, sfnt.clone(), None)?;
@@ -566,6 +567,29 @@ mod tests {
         out.extend(compressed);
         out.resize(total, 0);
         out
+    }
+
+    #[test]
+    fn fonts_registered_from_bytes_resolve_every_style_a_document_asks_for() {
+        // What a WASM host does at start: no font folder, only bytes (here the files a sandbox
+        // has installed). Documents asking for the family then lay out in it, each style in its
+        // own face, never a substitute or a synthesized bold or italic.
+        const FAMILY: &str = "Wasm Hostfont";
+        let db = FontDb::global();
+        assert!(crate::word::resolve(FAMILY, false, false).substituted, "not available before");
+        for (file, name) in
+            [("SourceSans3-Regular.ttf", "Host-Regular.ttf"), ("SourceSans3-Bold.ttf", "Host-Bold.ttf"), ("SourceSans3-It.ttf", "Host-It.ttf")]
+        {
+            let r = db.install_font(name, &renamed(file, FAMILY)).unwrap();
+            assert!(r.font.path.is_none() && r.warning.is_none(), "kept in memory, nothing written");
+        }
+        assert!(db.user_font_dir().is_none());
+        for (bold, italic, style) in [(false, false, "Regular"), (true, false, "Bold"), (false, true, "Italic")] {
+            let r = crate::word::resolve(FAMILY, bold, italic);
+            let face = r.face.get();
+            assert!(!r.substituted && !r.synth_bold && !r.synth_italic, "{style}: {r:?}");
+            assert_eq!((face.family.as_str(), face.style.as_str()), (FAMILY, style));
+        }
     }
 
     #[test]
