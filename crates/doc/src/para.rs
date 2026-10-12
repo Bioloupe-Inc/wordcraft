@@ -757,6 +757,10 @@ pub struct Paragraph {
     /// Set when this paragraph ends a section (OOXML keeps `w:sectPr` on the last paragraph).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub section: Option<Box<SectionProps>>,
+    /// Its ids in Word files (`w14:paraId`, `w14:textId`), kept through edits and saves; not
+    /// part of equality. New paragraphs have none until [`crate::Document::assign_para_ids`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<crate::ParaId>,
     /// Change counter for caches (not part of equality).
     #[serde(skip, default = "next_rev")]
     pub rev: u64,
@@ -788,6 +792,7 @@ impl Paragraph {
             mark: CharProps::default(),
             objects: Vec::new(),
             section: None,
+            id: None,
             rev: next_rev(),
         }
     }
@@ -1152,6 +1157,8 @@ impl Paragraph {
             mark: if self.text.is_empty() && off == 0 { self.mark.clone() } else { carry },
             objects: tail_objs,
             section: self.section.take(),
+            // A new paragraph: the first half keeps the ids.
+            id: None,
             rev: next_rev(),
         };
         if tail.text.is_empty() {

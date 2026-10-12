@@ -1637,6 +1637,40 @@ fn inspect_reports_structure() {
 }
 
 #[test]
+fn inspect_shows_paragraph_ids_that_stay_through_edits_and_saves() {
+    // A file whose paragraphs have known ids.
+    let mut d = wordcraft_doc::Document::from_text("One\nTwo\nThree");
+    for (i, b) in d.body.iter_mut().enumerate() {
+        if let wordcraft_doc::Block::Para(p) = std::sync::Arc::make_mut(b) {
+            p.id = Some(wordcraft_doc::ParaId { para: 0x100 + i as u32, text: 0x7777_7777 });
+        }
+    }
+    let file = crate::io::save_bytes("in.docx", &d).unwrap();
+    let ids = |s: &mut Session| -> Vec<String> {
+        let r = run(s, "document.inspect", json!({}));
+        r["blocks"].as_array().unwrap().iter().map(|b| b["paraId"].as_str().unwrap().to_string()).collect()
+    };
+    let mut s = Session::headless(crate::io::open_bytes("in.docx", &file).unwrap());
+    assert_eq!(ids(&mut s), ["00000100", "00000101", "00000102"]);
+    // Rewrite one paragraph and add one at the end.
+    run(&mut s, "select.text", json!({"text": "Two"}));
+    run(&mut s, "text.insert", json!({"text": "Deux"}));
+    run(&mut s, "caret.docEnd", json!({}));
+    run(&mut s, "text.newParagraph", json!({}));
+    run(&mut s, "text.insert", json!({"text": "Four"}));
+    let edited = ids(&mut s);
+    assert_eq!(edited[..3], ["00000100", "00000101", "00000102"]);
+    let new = u32::from_str_radix(&edited[3], 16).unwrap();
+    assert!(edited[3].len() == 8 && new < 0x8000_0000 && !(0x100..0x103).contains(&new), "{edited:?}");
+    // Saved and reopened, every paragraph has the id inspect showed.
+    let saved = crate::io::save_bytes("out.docx", &s.doc).unwrap();
+    assert_eq!(crate::io::save_bytes("out.docx", &s.doc).unwrap(), saved, "the same ids on every save");
+    let mut again = Session::headless(crate::io::open_bytes("out.docx", &saved).unwrap());
+    assert_eq!(ids(&mut again), edited);
+    assert_eq!(text(&again), "One\nDeux\nThree\nFour");
+}
+
+#[test]
 fn caret_navigation() {
     let mut s = s();
     run(&mut s, "document.setText", json!({"text": "first line\nsecond line"}));

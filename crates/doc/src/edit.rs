@@ -549,6 +549,8 @@ impl Document {
         if blocks.is_empty() {
             return Ok(pos.clone());
         }
+        // Pasted paragraphs are new ones: they get ids of their own.
+        crate::para_id::clear_para_ids(&mut blocks);
         if self.para_at(pos).is_none() {
             return Err(DocError::BadPath(pos.path.to_string()));
         }
