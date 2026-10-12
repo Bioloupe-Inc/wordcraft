@@ -471,6 +471,16 @@ fn doc_bib_style(doc: &Document) -> String {
 const MAX_UNDO: usize = 500;
 
 impl Session {
+    /// A session for programs (the CLI, the MCP server, library callers): like [`Session::new`],
+    /// but AutoCorrect and AutoFormat As You Type are off, so a batch of commands changes only
+    /// what its commands say. `tools.autocorrect` switches them back on.
+    pub fn headless(doc: Document) -> Self {
+        let mut s = Session::new(doc);
+        s.prefs.autocorrect.enabled = false;
+        s
+    }
+
+    /// A session with Word's editing defaults, as the app starts one (AutoCorrect on).
     pub fn new(doc: Document) -> Self {
         let start = doc.start_of(StoryRef::Body);
         let bib_style = doc_bib_style(&doc);

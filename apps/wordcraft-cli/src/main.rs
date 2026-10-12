@@ -37,7 +37,7 @@ USAGE:
 
 fn open(path: &str) -> Result<Session, String> {
     let doc = wordcraft_engine::io::open_path(std::path::Path::new(path))?;
-    let mut s = Session::new(doc);
+    let mut s = Session::headless(doc);
     s.path = Some(path.into());
     Ok(s)
 }
@@ -195,11 +195,11 @@ fn run(args: &[String]) -> Result<(), Failure> {
             let mut s = match (arg_value(&rest, "--file"), arg_value(&rest, "--template")) {
                 (Some(f), _) => open(&f)?,
                 (None, Some(t)) => {
-                    let mut s = Session::new(wordcraft_doc::Document::new());
+                    let mut s = Session::headless(wordcraft_doc::Document::new());
                     s.run("file.new", &json!({"template": t})).map_err(|e| e.to_string())?;
                     s
                 }
-                _ => Session::new(wordcraft_doc::Document::new()),
+                _ => Session::headless(wordcraft_doc::Document::new()),
             };
             if let Some(name) = arg_value(&rest, "--author") {
                 set_author(&mut s, &name)?;
@@ -241,7 +241,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
         }
         "commands" => {
             validate_options("commands", &rest, COMMANDS_OPTIONS)?;
-            let s = Session::new(wordcraft_doc::Document::new());
+            let s = Session::headless(wordcraft_doc::Document::new());
             if rest.iter().any(|a| a == "--json") {
                 let list = serde_json::to_string_pretty(&s.registry.describe()).unwrap_or_default();
                 write_stdout(|o| writeln!(o, "{list}"))
@@ -256,7 +256,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
         }
         "parity" => {
             validate_options("parity", &rest, PARITY_OPTIONS)?;
-            let s = Session::new(wordcraft_doc::Document::new());
+            let s = Session::headless(wordcraft_doc::Document::new());
             let p = wordcraft_engine::catalog::parity(&s.registry);
             if rest.iter().any(|a| a == "--markdown") {
                 write_stdout(|o| write!(o, "{}", parity_markdown(&p)))
@@ -414,6 +414,26 @@ mod tests {
         assert_eq!(run(&args(&["info", "missing.docx", "--passwrod", "x"])), Err("info: unknown option --passwrod".into()));
         assert_eq!(run(&args(&["render", "missing.docx", "out.png", "--sclae", "2"])), Err("render: unknown option --sclae".into()));
         assert_eq!(run(&args(&["zotero", "refresh", "missing.docx", "--prot", "1"])), Err("zotero: unknown option --prot".into()));
+    }
+
+    #[test]
+    fn run_leaves_untouched_text_alone() {
+        let dir = std::env::temp_dir().join(format!("wordcraft-cli-run-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (input, output) = (dir.join("in.docx"), dir.join("out.docx"));
+        let bytes = wordcraft_engine::io::save_bytes("in.docx", &wordcraft_doc::Document::from_text("hello")).unwrap();
+        std::fs::write(&input, bytes).unwrap();
+        let (i, o) = (input.to_string_lossy().to_string(), output.to_string_lossy().to_string());
+        let cmds = ["caret.docEnd", "text.newParagraph", r#"text.insert={"text":"Engine test paragraph."}"#];
+        let mut a = vec!["run", "--file", &i];
+        for c in &cmds {
+            a.extend(["--cmd", c]);
+        }
+        a.extend(["--save", &o]);
+        run(&args(&a)).unwrap();
+        let doc = wordcraft_engine::io::open_path(&output).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(doc.plain_text(wordcraft_doc::StoryRef::Body), "hello\nEngine test paragraph.");
     }
 
     #[test]
