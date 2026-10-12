@@ -174,7 +174,7 @@ fn controls_round_trip() {
     ));
     assert!(xml.contains(r#"<w14:checkbox><w14:checked w14:val="1"/><w14:checkedState w14:val="2612" w14:font="Symbola"/>"#));
     // The block control is around the paragraphs, the inline ones inside theirs.
-    assert!(xml.contains("<w:sdtContent><w:p>"));
+    assert!(xml.contains("<w:sdtContent><w:p w14:paraId="));
     assert!(xml.contains(r#"<w:dataBinding w:xpath="/root/when" w:storeItemID="{00000000-0000-0000-0000-000000000001}"/><w:date"#));
 }
 

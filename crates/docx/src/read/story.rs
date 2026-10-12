@@ -9,7 +9,7 @@ use wordcraft_doc::graphic::{Embedded, Graphic, GraphicItem, GraphicKind};
 use wordcraft_doc::para::{AltText, Anchor, Float, FloatAlign, NoteKind, ShapeKind, Wrap, WrapText, cap_alt};
 use wordcraft_doc::props::{CharProps, NumChange, PropChange, Rgb};
 use wordcraft_doc::table::{Cell, MAX_COLS, MAX_ROWS, Row, Table};
-use wordcraft_doc::{Block, Blocks, InlineObject, Paragraph, PartKind, RevisionKind, Run, para_block};
+use wordcraft_doc::{Block, Blocks, InlineObject, ParaId, Paragraph, PartKind, RevisionKind, Run, para_block};
 
 use super::Reader;
 use super::props::{sectpr, tcpr, trpr};
@@ -188,6 +188,8 @@ impl Reader<'_> {
                     {
                         let lines = first.props.drop_cap;
                         let mut props = p.props.clone();
+                        // The paragraph is the text's, not its framed first letter's.
+                        first.id = p.id.or(first.id);
                         first.append(p);
                         props.drop_cap = lines;
                         first.props = props;
@@ -325,6 +327,9 @@ impl Reader<'_> {
     fn read_para(&mut self, sc: &mut StoryCtx, e: &El, rels: &Rels, depth: usize) -> Paragraph {
         let mut pb = PB::default();
         let mut para = Paragraph::new();
+        // [MS-DOCX] 2.6.2: eight hex digits each; ids Word wouldn't accept are replaced on save.
+        let hex = |name: &str| e.attr(name).and_then(|v| u32::from_str_radix(v.trim(), 16).ok());
+        para.id = hex("w14:paraId").map(|para| ParaId { para, text: hex("w14:textId").unwrap_or(ParaId::LIMIT) });
         let mut mark_moves: [Option<&El>; 2] = [None, None];
         self.moves.closed_here = [None, None];
         for o in std::mem::take(&mut sc.pending) {

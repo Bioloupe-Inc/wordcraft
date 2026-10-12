@@ -31,6 +31,7 @@ pub mod math_linear;
 pub mod math_symbols;
 pub mod numbering;
 pub mod para;
+pub mod para_id;
 pub mod props;
 pub mod resolve;
 pub mod section;
@@ -49,6 +50,7 @@ pub use control::{ContentControl, ControlKind, ControlLock, ControlRange, Contro
 pub use fields::FieldRange;
 pub use numbering::{ListKind, Numbering};
 pub use para::{InlineObject, Paragraph, Run};
+pub use para_id::ParaId;
 pub use props::{Align, CharProps, ParaProps, Rgb, TextColor};
 pub use section::SectionProps;
 pub use styles::{Style, StyleKind, StyleSheet};

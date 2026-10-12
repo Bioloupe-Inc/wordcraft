@@ -81,8 +81,6 @@ pub(crate) struct Writer<'d> {
     endnotes: Vec<u32>,
     /// Header/footer part id → (file name, is footer).
     hf: Vec<(u32, String, bool)>,
-    /// Paragraphs that need a `w14:paraId` (last paragraph of each comment), by address.
-    para_ids: HashMap<usize, String>,
     /// A note reference mark to put at the start of the next paragraph.
     pending_mark: Option<&'static str>,
     /// The note being written (is footnote, part id): its reference to itself is the mark above.
@@ -124,12 +122,15 @@ pub fn write_as(doc: &Document, flavor: Flavor) -> Result<Vec<u8>, DocxError> {
 /// without the leading `/`, bytes).
 pub(crate) fn write_parts(doc: &Document, flavor: Flavor) -> Result<Vec<(String, Vec<u8>)>, DocxError> {
     // A range field must be whole in the file: drop markers that lost their partner in editing.
-    let balanced;
-    let doc = if doc.has_unbalanced_field_ranges() {
+    // Every paragraph is written with ids of its own: give new paragraphs theirs (a session does
+    // this as it edits, so its ids stay the same from save to save).
+    let fixed;
+    let doc = if doc.has_unbalanced_field_ranges() || !doc.para_ids_complete() {
         let mut d = doc.clone();
         d.balance_field_ranges();
-        balanced = d;
-        &balanced
+        d.assign_para_ids();
+        fixed = d;
+        &fixed
     } else {
         doc
     };
@@ -147,7 +148,6 @@ pub(crate) fn write_parts(doc: &Document, flavor: Flavor) -> Result<Vec<(String,
         footnotes: Vec::new(),
         endnotes: Vec::new(),
         hf: Vec::new(),
-        para_ids: HashMap::new(),
         pending_mark: None,
         current_note: None,
         toc_hold_end: false,
@@ -172,17 +172,15 @@ pub(crate) fn write_parts(doc: &Document, flavor: Flavor) -> Result<Vec<(String,
     let mut rels = PartRels::default();
     let mut root = PartRels::default();
 
-    // Comments get paragraph ids before any story is written.
-    let mut comment_paras: Vec<(u32, String)> = Vec::new();
-    for (i, (cid, c)) in doc.comments.iter().enumerate() {
-        if let Some(part) = doc.parts.get(&c.part)
-            && let Some(last) = part.blocks.iter().rev().find_map(|b| b.as_para())
-        {
-            let pid = format!("{:08X}", 0x1000_0000u32 + i as u32 + 1);
-            wr.para_ids.insert(last as *const _ as usize, pid.clone());
-            comment_paras.push((*cid, pid));
-        }
-    }
+    // A comment is named by its last paragraph's id (commentsExtended).
+    let comment_paras: Vec<(u32, String)> = doc
+        .comments
+        .iter()
+        .filter_map(|(cid, c)| {
+            let last = doc.parts.get(&c.part)?.blocks.iter().rev().find_map(|b| b.as_para())?;
+            Some((*cid, format!("{:08X}", last.id?.para)))
+        })
+        .collect();
 
     // Body.
     let mut w = W::new();
@@ -601,10 +599,6 @@ impl Writer<'_> {
             }
         };
         Some(rels.add(if footer { rt::FOOTER } else { rt::HEADER }, &file, false))
-    }
-
-    fn take_para_id(&self, p: &wordcraft_doc::Paragraph) -> Option<String> {
-        self.para_ids.get(&(p as *const _ as usize)).cloned()
     }
 
     /// Whether `p` holds a reference to the note being written.

@@ -306,6 +306,10 @@ fn inspect(s: &mut Session, v: &Value) -> CmdResult {
             Block::Para(p) => {
                 let style = p.props.style.clone().unwrap_or_else(|| "Normal".into());
                 let mut o = json!({"index": i, "type": "paragraph", "style": style, "len": p.len()});
+                if let Some(id) = p.id {
+                    o["paraId"] = json!(hex_id(id.para));
+                    o["textId"] = json!(hex_id(id.text));
+                }
                 if with_text {
                     o["text"] = json!(p.plain_text());
                 }
@@ -343,7 +347,15 @@ fn inspect(s: &mut Session, v: &Value) -> CmdResult {
                             .collect()
                     })
                     .collect();
-                blocks.push(json!({"index": i, "type": "table", "rows": t.rows.len(), "cols": t.cols(), "style": t.props.style, "cells": cells}));
+                // Each cell's paragraph ids, in the shape of `cells`.
+                let para_ids: Vec<Vec<Vec<String>>> = t
+                    .rows
+                    .iter()
+                    .map(|r| r.cells.iter().map(|c| c.blocks.iter().filter_map(|b| Some(hex_id(b.as_para()?.id?.para))).collect()).collect())
+                    .collect();
+                blocks.push(
+                    json!({"index": i, "type": "table", "rows": t.rows.len(), "cols": t.cols(), "style": t.props.style, "cells": cells, "paraIds": para_ids}),
+                );
             }
         }
     }
@@ -363,6 +375,11 @@ fn inspect(s: &mut Session, v: &Value) -> CmdResult {
         "canUndo": s.can_undo(),
         "canRedo": s.can_redo(),
     }))
+}
+
+/// A paragraph id as Word files write it (`w14:paraId`): eight hex digits.
+fn hex_id(id: u32) -> String {
+    format!("{id:08X}")
 }
 
 fn paragraph(s: &mut Session, v: &Value) -> CmdResult {

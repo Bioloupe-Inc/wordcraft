@@ -127,6 +127,8 @@ impl Writer<'_> {
             let mut head = p.clone();
             let tail = head.split_off(first.len_utf8()).ok();
             if let Some(mut tail) = tail {
+                // The paragraph's ids go with its text; the framed letter is written without.
+                tail.id = head.id.take();
                 head.props.drop_cap = Some(lines);
                 head.section = None;
                 self.para_inner(w, &head, rels, false, depth, true);
@@ -142,9 +144,8 @@ impl Writer<'_> {
     }
 
     fn para_inner(&mut self, w: &mut W, p: &Paragraph, rels: &mut PartRels, top: bool, depth: usize, framed: bool) {
-        let para_id = self.take_para_id(p);
-        match &para_id {
-            Some(id) => w.open("w:p", &[("w14:paraId", id), ("w14:textId", "77777777")]),
+        match p.id {
+            Some(id) => w.open("w:p", &[("w14:paraId", &format!("{:08X}", id.para)), ("w14:textId", &format!("{:08X}", id.text))]),
             None => w.open("w:p", &[]),
         }
         let mut pp = p.props.clone();

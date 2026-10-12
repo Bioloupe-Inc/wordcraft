@@ -481,7 +481,9 @@ impl Session {
     }
 
     /// A session with Word's editing defaults, as the app starts one (AutoCorrect on).
-    pub fn new(doc: Document) -> Self {
+    pub fn new(mut doc: Document) -> Self {
+        // Every paragraph has ids from the start (`document.inspect` shows them).
+        doc.assign_para_ids();
         let start = doc.start_of(StoryRef::Body);
         let bib_style = doc_bib_style(&doc);
         Session {
@@ -816,6 +818,7 @@ impl Session {
         self.bib_style = doc_bib_style(&doc);
         self.doc = doc;
         self.doc.ensure_nonempty();
+        self.doc.assign_para_ids();
         self.password = None;
         self.sel = Selection::caret(self.doc.start_of(StoryRef::Body));
         self.pending = None;
@@ -1066,6 +1069,8 @@ impl Session {
                     self.touch();
                     self.doc.ensure_nonempty();
                     self.doc.prune_text_boxes();
+                    // New paragraphs get ids now, so they stay the same from save to save.
+                    self.doc.assign_para_ids();
                     // Glued connectors follow the shapes they join.
                     if crate::cmd::connectors::reroutes_after(id) && crate::cmd::connectors::reroute(self) {
                         self.touch();
