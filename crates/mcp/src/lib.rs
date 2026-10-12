@@ -25,7 +25,7 @@ pub struct Headless {
 
 impl Default for Headless {
     fn default() -> Self {
-        Headless { session: Session::new(wordcraft_doc::Document::new()) }
+        Headless { session: Session::headless(wordcraft_doc::Document::new()) }
     }
 }
 

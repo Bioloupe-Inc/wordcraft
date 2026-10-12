@@ -107,3 +107,18 @@ fn render_and_screenshot_through_the_app_use_no_temp_file() {
         assert!(params.get("path").is_none(), "{tool} asked for a file: {params}");
     }
 }
+
+#[test]
+fn a_headless_batch_changes_only_what_it_is_asked_to() {
+    use crate::Backend;
+    let mut h = Headless::default();
+    let mut exec = |command: &str, params: Value| h.call("engine.execute", json!({"command": command, "params": params})).unwrap();
+    exec("document.setText", json!({"text": "hello"}));
+    exec("caret.docEnd", json!({}));
+    exec("text.newParagraph", json!({}));
+    exec("text.insert", json!({"text": "teh end"}));
+    exec("text.newParagraph", json!({}));
+    let doc = h.call("document.inspect", json!({})).unwrap();
+    let texts: Vec<&str> = doc["blocks"].as_array().unwrap().iter().map(|b| b["text"].as_str().unwrap()).collect();
+    assert_eq!(texts, ["hello", "teh end", ""]);
+}

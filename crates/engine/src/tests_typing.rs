@@ -209,6 +209,21 @@ fn enter_finishes_a_word_for_autocorrect() {
 }
 
 #[test]
+fn headless_sessions_type_exactly_what_they_are_given() {
+    // Programs (the CLI, the MCP server, library callers) get what their commands say: no
+    // AutoCorrect or AutoFormat as you type, even in text the batch never touched.
+    let mut s = Session::headless(wordcraft_doc::Document::from_text("hello"));
+    run(&mut s, "caret.docEnd", json!({}));
+    typ(&mut s, "\nteh \"end\" -- 1/2\n* ");
+    assert_eq!(s.doc.plain_text(StoryRef::Body), "hello\nteh \"end\" -- 1/2\n* ");
+    assert!(paras(&s).iter().all(|(_, level, _)| level.is_none()), "no automatic list");
+    // An agent can still switch it on.
+    run(&mut s, "tools.autocorrect", json!({"enabled": true}));
+    typ(&mut s, "\nteh ");
+    assert!(s.doc.plain_text(StoryRef::Body).ends_with("\nThe "));
+}
+
+#[test]
 fn ordinals_become_superscript() {
     let s = typed("the 1st and 22nd and 13th but not 1th ");
     let p = s.doc.para_at(&Pos::body(0, 0)).unwrap();

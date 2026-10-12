@@ -1,6 +1,6 @@
 # Typing parity with Word
 
-> **Last reviewed:** 2026-10-11 · **Last updated:** 2026-10-11 · **Change:** minor (right-to-left letters typed into an empty paragraph make it right-to-left, #713; previously minor: editing options: typing replaces selection, overtype, #485; previously minor: Move Paragraph Up/Down, Promote/Demote, Go Back and Alt+X keys, #343) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
+> **Last reviewed:** 2026-10-12 · **Last updated:** 2026-10-12 · **Change:** minor (CLI, MCP and library sessions don't AutoCorrect; previously minor: right-to-left letters typed into an empty paragraph make it right-to-left, #713; previously minor: editing options: typing replaces selection, overtype, #485; previously minor: Move Paragraph Up/Down, Promote/Demote, Go Back and Alt+X keys, #343) · **Target:** Microsoft Word (Microsoft 365) for Mac 16.113.4
 
 What Word does when you type, observed black-box (same keystrokes typed into Word and
 WordCraft, results read back paragraph by paragraph) and pinned by tests in
@@ -87,6 +87,11 @@ Applied when a word is finished by a space, punctuation **or Enter** (`enter_fin
   numbered lists, border lines; user entries are added, replaced or deleted (built-in ones too),
   and "don't capitalize after" exceptions extend the abbreviation list. A replacement of several
   words takes a sentence capital on its first (`autocorrect_options_change_what_typing_does`).
+- Programs get exactly what their commands say: sessions the CLI (`run`, `convert`…), the MCP
+  server and library callers start (`Session::headless`) have AutoCorrect and AutoFormat As You
+  Type off, so a batch that adds a paragraph never rewrites text it didn't touch; the app keeps
+  Word's defaults. `tools.autocorrect {"enabled": true}` switches them on
+  (`headless_sessions_type_exactly_what_they_are_given`).
 
 ¹ From Word's documented AutoFormat and AutoCorrect options; not yet keystroke-compared with
 Word.
@@ -144,6 +149,7 @@ Word.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-12 | minor | CLI, MCP and library sessions (`Session::headless`) start with AutoCorrect and AutoFormat As You Type off; the app keeps Word's defaults |
 | 2026-10-11 | minor | Text direction: right-to-left letters typed into an empty paragraph make it right-to-left; existing paragraphs keep theirs (#713) |
 | 2026-10-11 | trivial | Grammar proofing (not AutoCorrect) no longer suggests capitalising a sentence after `...` or `…` (`proof::tests::ellipses_do_not_start_sentences`) |
 | 2026-10-11 | minor | AutoFormat tables from `+---+`, arrow bullets, smileys inside words, undo after a border line (#546) |
