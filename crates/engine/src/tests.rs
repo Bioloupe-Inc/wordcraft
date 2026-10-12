@@ -1642,7 +1642,7 @@ fn inspect_shows_paragraph_ids_that_stay_through_edits_and_saves() {
     let mut d = wordcraft_doc::Document::from_text("One\nTwo\nThree");
     for (i, b) in d.body.iter_mut().enumerate() {
         if let wordcraft_doc::Block::Para(p) = std::sync::Arc::make_mut(b) {
-            p.id = Some(wordcraft_doc::ParaId { para: 0x100 + i as u32, text: 0x7777_7777 });
+            p.id = Some(wordcraft_doc::ParaId::new(0x100 + i as u32, 0x7777_7777));
         }
     }
     let file = crate::io::save_bytes("in.docx", &d).unwrap();
@@ -1724,6 +1724,25 @@ fn what_is_added_above_a_paragraph_gets_new_ids_and_the_paragraph_keeps_its_own(
     let old: Vec<Vec<Vec<String>>> = serde_json::from_str(&table.1).unwrap();
     assert_eq!(ids[1], old[0], "the original row keeps its ids");
     assert_ne!(ids[0], old[0]);
+}
+
+#[test]
+fn a_paragraph_gets_a_new_text_id_when_its_text_changes() {
+    let mut s = Session::headless(wordcraft_doc::Document::from_text("One\nTwo\nThree"));
+    let before = para_ids(&mut s);
+    run(&mut s, "select.text", json!({"text": "Two"}));
+    run(&mut s, "text.insert", json!({"text": "Deux"}));
+    run(&mut s, "select.text", json!({"text": "Three"}));
+    run(&mut s, "format.bold", json!({}));
+    let after = para_ids(&mut s);
+    assert_eq!(after[0], before[0], "untouched");
+    assert_eq!(after[1].1, before[1].1, "same paragraph");
+    assert_ne!(after[1].2, before[1].2, "new text");
+    assert_eq!(after[2].2, before[2].2, "formatting isn't text");
+    // Undo brings the text back with the id it had.
+    run(&mut s, "edit.undo", json!({}));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(para_ids(&mut s), before);
 }
 
 #[test]

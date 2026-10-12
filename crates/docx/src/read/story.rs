@@ -329,7 +329,7 @@ impl Reader<'_> {
         let mut para = Paragraph::new();
         // [MS-DOCX] 2.6.2: eight hex digits each; ids Word wouldn't accept are replaced on save.
         let hex = |name: &str| e.attr(name).and_then(|v| u32::from_str_radix(v.trim(), 16).ok());
-        para.id = hex("w14:paraId").map(|para| ParaId { para, text: hex("w14:textId").unwrap_or(ParaId::LIMIT) });
+        para.id = hex("w14:paraId").map(|para| ParaId::new(para, hex("w14:textId").unwrap_or(ParaId::LIMIT)));
         let mut mark_moves: [Option<&El>; 2] = [None, None];
         self.moves.closed_here = [None, None];
         for o in std::mem::take(&mut sc.pending) {

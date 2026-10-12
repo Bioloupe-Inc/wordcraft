@@ -29,8 +29,8 @@ a document that was saved with it on. `wordcraft-cli run` takes `--author` too.
 The headless server and `wordcraft-cli run` change only what their commands say: AutoCorrect and
 AutoFormat As You Type are off (the app keeps Word's defaults; `tools.autocorrect {"enabled":
 true}` turns them on). `inspect_document` gives each paragraph's Word ids (`paraId`, `textId`,
-eight hex digits); they stay with the paragraph through edits and saves, and new paragraphs get
-fresh ones. Fonts the document needs that aren't installed can be added from their bytes with
+eight hex digits): `paraId` stays with the paragraph through edits and saves, `textId` changes
+when its text does, and new paragraphs get fresh ones. Fonts the document needs that aren't installed can be added from their bytes with
 `font.add {"data": "<base64>", "name": "Family-Regular.ttf"}`, one call per style.
 
 ## Tools
