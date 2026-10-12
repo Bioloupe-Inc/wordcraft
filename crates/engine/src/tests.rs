@@ -1670,6 +1670,62 @@ fn inspect_shows_paragraph_ids_that_stay_through_edits_and_saves() {
     assert_eq!(text(&again), "One\nDeux\nThree\nFour");
 }
 
+/// Each body block's (text, paraId, textId) from `document.inspect`; a table gives its first
+/// cell's text and its cells' paraIds.
+fn para_ids(s: &mut Session) -> Vec<(String, String, String)> {
+    let r = run(s, "document.inspect", json!({}));
+    let str_of = |v: &serde_json::Value| v.as_str().unwrap_or_default().to_string();
+    r["blocks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| match b["type"].as_str() {
+            Some("table") => (str_of(&b["cells"][0][0]), b["paraIds"].to_string(), String::new()),
+            _ => (str_of(&b["text"]), str_of(&b["paraId"]), str_of(&b["textId"])),
+        })
+        .collect()
+}
+
+#[test]
+fn what_is_added_above_a_paragraph_gets_new_ids_and_the_paragraph_keeps_its_own() {
+    let mut s = Session::headless(wordcraft_doc::Document::from_text("One\nTwo\nThree"));
+    let before = para_ids(&mut s);
+    let at = |b: usize| json!({"pos": crate::cmd::pos_json(&Pos::body(b, 0))});
+    // Paste a whole paragraph above "Three".
+    run(&mut s, "select.range", json!({"anchor": Pos::body(0, 0), "focus": Pos::body(1, 0)}));
+    run(&mut s, "edit.copy", json!({}));
+    run(&mut s, "caret.set", at(2));
+    run(&mut s, "edit.paste", json!({}));
+    // Paste text at the start of "Two", and press Enter at the start of "One".
+    run(&mut s, "caret.set", at(1));
+    run(&mut s, "edit.paste", json!({"text": "Pasted "}));
+    run(&mut s, "caret.set", at(0));
+    run(&mut s, "text.newParagraph", json!({}));
+    let after = para_ids(&mut s);
+    let texts: Vec<&str> = after.iter().map(|p| p.0.as_str()).collect();
+    assert_eq!(texts, ["", "One", "Pasted Two", "One", "Three"]);
+    // The originals keep their paragraph ids; "Two" (edited) gets a new text id.
+    assert_eq!(after[1], before[0]);
+    assert_eq!(after[2].1, before[1].1);
+    assert_eq!(after[4], before[2]);
+    let mut all: Vec<&str> = after.iter().map(|p| p.1.as_str()).collect();
+    all.sort_unstable();
+    all.dedup();
+    assert_eq!(all.len(), 5, "the new paragraphs have ids of their own: {after:?}");
+
+    // A row inserted above keeps the row below it as it was.
+    run(&mut s, "caret.docEnd", json!({}));
+    run(&mut s, "insert.table", json!({"rows": 1, "cols": 1}));
+    run(&mut s, "text.insert", json!({"text": "Cell"}));
+    let table = para_ids(&mut s).into_iter().find(|p| p.0 == "Cell").unwrap();
+    run(&mut s, "table.insertRowAbove", json!({}));
+    let ids: Vec<Vec<Vec<String>>> =
+        serde_json::from_str(&para_ids(&mut s).into_iter().find(|p| p.2.is_empty() && p.1.starts_with("[[")).unwrap().1).unwrap();
+    let old: Vec<Vec<Vec<String>>> = serde_json::from_str(&table.1).unwrap();
+    assert_eq!(ids[1], old[0], "the original row keeps its ids");
+    assert_ne!(ids[0], old[0]);
+}
+
 #[test]
 fn caret_navigation() {
     let mut s = s();

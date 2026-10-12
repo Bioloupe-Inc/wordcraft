@@ -1150,6 +1150,9 @@ impl Paragraph {
         self.runs = keep;
         // The new paragraph's mark takes the formatting at the split, but never a hyperlink.
         let carry = self.props_at(off).unlinked();
+        // Split at the start, the text moves on and keeps the ids (what comes before is new);
+        // anywhere else the first half keeps them.
+        let id = if off == 0 { self.id.take() } else { None };
         let mut tail = Paragraph {
             text: tail_text,
             runs: tail_runs,
@@ -1157,8 +1160,7 @@ impl Paragraph {
             mark: if self.text.is_empty() && off == 0 { self.mark.clone() } else { carry },
             objects: tail_objs,
             section: self.section.take(),
-            // A new paragraph: the first half keeps the ids.
-            id: None,
+            id,
             rev: next_rev(),
         };
         if tail.text.is_empty() {
@@ -1170,9 +1172,13 @@ impl Paragraph {
         Ok(tail)
     }
 
-    /// Append `other`'s content (its paragraph properties are dropped; its section break kept).
+    /// Append `other`'s content (its paragraph properties are dropped; its section break kept,
+    /// and its ids when this paragraph has none).
     pub fn append(&mut self, other: Paragraph) {
-        let Paragraph { text, runs, objects, section, .. } = other;
+        let Paragraph { text, runs, objects, section, id, .. } = other;
+        if self.id.is_none() {
+            self.id = id;
+        }
         self.text.push_str(&text);
         self.runs.extend(runs);
         self.objects.extend(objects);
