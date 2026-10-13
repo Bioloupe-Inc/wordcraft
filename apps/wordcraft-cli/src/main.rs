@@ -20,7 +20,7 @@ USAGE:
   wordcraft-cli text <file>                   plain text
   wordcraft-cli inspect <file>                document structure (JSON)
   wordcraft-cli render <file> <out.png> [--page N] [--scale S]
-  wordcraft-cli run [--file F | --template T] --cmd 'id={json}' [--cmd …] [--save OUT] [--print]
+  wordcraft-cli run [--file F | --template T] --cmd 'id={json}' [--cmd …] [--script FILE.jsonl] [--save OUT] [--print]
                     [--author NAME]           run commands headlessly, then save (--author names
                                               who tracked changes and comments are by)
   wordcraft-cli commands [--json]             list every command
@@ -83,6 +83,7 @@ const RUN_OPTIONS: &[OptionSpec] = &[
     OptionSpec { name: "--file", takes_value: true },
     OptionSpec { name: "--template", takes_value: true },
     OptionSpec { name: "--cmd", takes_value: true },
+    OptionSpec { name: "--script", takes_value: true },
     OptionSpec { name: "--save", takes_value: true },
     OptionSpec { name: "--page", takes_value: true },
     OptionSpec { name: "--scale", takes_value: true },
@@ -204,21 +205,31 @@ fn run(args: &[String]) -> Result<(), Failure> {
             if let Some(name) = arg_value(&rest, "--author") {
                 set_author(&mut s, &name)?;
             }
+            // `--cmd` and `--script` steps run in the order they are given.
+            let mut steps = Vec::new();
             let mut i = 0;
             while i < rest.len() {
-                if rest.get(i).map(String::as_str) == Some("--cmd") {
-                    let spec = rest.get(i + 1).ok_or("--cmd needs a value")?;
-                    let (id, params) = match spec.split_once('=') {
-                        Some((id, p)) => (id.to_string(), serde_json::from_str::<Value>(p).map_err(|e| format!("{id}: bad JSON params: {e}"))?),
-                        None => (spec.clone(), json!({})),
-                    };
-                    let r = s.run(&id, &params).map_err(|e| format!("{id}: {e}"))?;
-                    if rest.iter().any(|a| a == "--print") {
-                        write_stdout(|o| writeln!(o, "{id}: {r}"))?;
+                match rest.get(i).map(String::as_str) {
+                    Some("--cmd") => {
+                        let spec = rest.get(i + 1).ok_or("--cmd needs a value")?;
+                        let (id, params) = match spec.split_once('=') {
+                            Some((id, p)) => (id.to_string(), serde_json::from_str::<Value>(p).map_err(|e| format!("{id}: bad JSON params: {e}"))?),
+                            None => (spec.clone(), json!({})),
+                        };
+                        steps.push((id, params));
+                        i += 2;
                     }
-                    i += 2;
-                } else {
-                    i += 1;
+                    Some("--script") => {
+                        steps.extend(script_steps(rest.get(i + 1).ok_or("--script needs a file")?)?);
+                        i += 2;
+                    }
+                    _ => i += 1,
+                }
+            }
+            for (id, params) in steps {
+                let r = s.run(&id, &params).map_err(|e| format!("{id}: {e}"))?;
+                if rest.iter().any(|a| a == "--print") {
+                    write_stdout(|o| writeln!(o, "{id}: {r}"))?;
                 }
             }
             if let Some(out) = arg_value(&rest, "--save") {
@@ -382,6 +393,23 @@ fn main() -> ExitCode {
     }
 }
 
+/// The steps of a script file: one `{"command": "<id>", "params": {...}}` object per line; blank
+/// lines and lines starting with `#` are skipped. A file has no command-line length limit.
+fn script_steps(path: &str) -> Result<Vec<(String, Value)>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let mut steps = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let v: Value = serde_json::from_str(line).map_err(|e| format!("{path}:{}: bad JSON: {e}", n + 1))?;
+        let id = v.get("command").and_then(Value::as_str).ok_or_else(|| format!("{path}:{}: needs a `command` field", n + 1))?;
+        steps.push((id.to_string(), v.get("params").cloned().unwrap_or_else(|| json!({}))));
+    }
+    Ok(steps)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,6 +462,29 @@ mod tests {
         let doc = wordcraft_engine::io::open_path(&output).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
         assert_eq!(doc.plain_text(wordcraft_doc::StoryRef::Body), "hello\nEngine test paragraph.");
+    }
+
+    #[test]
+    fn run_takes_its_steps_from_a_script_file() {
+        let dir = std::env::temp_dir().join(format!("wordcraft-cli-script-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (script, output) = (dir.join("steps.jsonl"), dir.join("out.docx"));
+        let long = "x".repeat(200_000);
+        let lines = [
+            "# a script holds what a command line cannot".to_string(),
+            r#"{"command": "text.insert", "params": {"text": "Scripted "}}"#.to_string(),
+            String::new(),
+            format!(r#"{{"command": "text.insert", "params": {{"text": "{long}"}}}}"#),
+        ];
+        std::fs::write(&script, lines.join("\n")).unwrap();
+        let (s, o) = (script.to_string_lossy().to_string(), output.to_string_lossy().to_string());
+        run(&args(&["run", "--cmd", "caret.docEnd", "--script", &s, "--save", &o])).unwrap();
+        let doc = wordcraft_engine::io::open_path(&output).unwrap();
+        std::fs::write(&script, "{\"params\": {}}").unwrap();
+        let missing = run(&args(&["run", "--script", &s]));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(doc.plain_text(wordcraft_doc::StoryRef::Body), format!("Scripted {long}"));
+        assert!(missing.is_err_and(|e| e.to_string().contains("needs a `command` field")));
     }
 
     #[test]
